@@ -232,6 +232,8 @@ jobs:
             | grep -F '7f57730bcaa2648a725cf11264a8a2829fd0a16bc1d06e55ed1cefd4371b1063'
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" \
             | grep -F "package: name='ru.svoitaxi.collector' versionCode='8' versionName='0.8.0'"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump resources "$APK" \
+            | grep -F 'svoi_collector_icon'
           python3 - <<'PY'
           from zipfile import ZipFile
           p='android-driver/address-collector/build/outputs/apk/release/address-collector-release.apk'
@@ -239,7 +241,7 @@ jobs:
             assets=z.namelist()
             for f in ('assets/collector.html','assets/collector.js','assets/team-sync.js','assets/maplibre-gl.js'):
               assert f in assets, f
-            assert any(x.endswith('/svoi_collector_icon.png') for x in assets), 'Launcher icon missing from APK'
+            assert any(x.startswith('res/') and x.endswith('.png') for x in assets), 'Compiled Android PNG resources missing'
             js=z.read('assets/collector.js')
             assert b'renderHouseNumbers' in js
             assert b'saveFromMap' in js
