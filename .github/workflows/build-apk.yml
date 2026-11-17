@@ -122,3 +122,45 @@ jobs:
           path: android-driver/address-collector/build/outputs/apk/debug/address-collector-debug.apk
           if-no-files-found: error
           retention-days: 14
+
+  release:
+    name: Publish direct APK download in GitHub Releases
+    needs: apk
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Download tested APK from current build
+        uses: actions/download-artifact@v7
+        with:
+          name: SVOI-ADDRESS-COLLECTOR-0.7-PREVIEW-APK
+          path: release
+
+      - name: Publish stable public direct APK link (no Actions login required)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          source=release/address-collector-debug.apk
+          asset=release/SVOI-Address-Collector-0.7-preview.apk
+          test -s "$source"
+          mv "$source" "$asset"
+          sha256sum "$asset"
+          tag=v0.7.0-preview
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" "$asset" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$tag" "$asset" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title 'СВОИ ТАКСИ — Сбор адресов 0.7 (тест)' \
+              --notes 'Тестовая APK версия 0.7. Ручные точки сохраняются без GPS, номера домов на общей карте, ошибки сохранения рядом с кнопкой. Устанавливается рядом со старым сборщиком. Старое приложение не удалять.' \
+              --prerelease
+          fi
+          url="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[] | select(.name == "SVOI-Address-Collector-0.7-preview.apk") | .url')"
+          test -n "$url"
+          echo "DIRECT_APK_DOWNLOAD=$url"
+          echo 'PUBLIC_COLLECTOR_RELEASE_APK_READY'

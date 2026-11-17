@@ -18,6 +18,10 @@
 
 Debug APK из разных GitHub-hosted сборок тоже может иметь разную подпись. Для постоянных обновлений без переустановки потребуется стабильная приватная подпись приложения, хранящаяся отдельно от публичного кода.
 
+## Скачать APK без GitHub Actions
+
+После успешной сборки откройте [прямую загрузку APK 0.7](https://github.com/lan4u951337-coder/SVOI-ADDRESS-COLLECTOR/releases/download/v0.7.0-preview/SVOI-Address-Collector-0.7-preview.apk) или [страницу релиза](https://github.com/lan4u951337-coder/SVOI-ADDRESS-COLLECTOR/releases/tag/v0.7.0-preview). Готовый APK прикрепляется к GitHub Release **только после успешных тестов и Android-сборки**. Ссылка доступна без входа в GitHub и не ограничена 14-дневным сроком Actions-артефакта.
+
 ## Как собрать на GitHub
 
 В публичном репозитории откройте **Actions → Build SVOI address collector 0.7 APK → Run workflow** (или дождитесь запуска на `main`). После зелёного результата скачайте архив в разделе **Artifacts**, распакуйте `address-collector-debug.apk` и установите на Android.
