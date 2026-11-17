@@ -1,0 +1,52 @@
+name: Validate collector signing secrets (no APK)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/validate-collector-signing.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    env:
+      KEYSTORE_BASE64: ${{ secrets.COLLECTOR_RELEASE_KEYSTORE_BASE64 }}
+      STORE_PASSWORD: ${{ secrets.COLLECTOR_RELEASE_KEYSTORE_PASSWORD }}
+    steps:
+      - name: Check official signing material without exposing credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          if [[ -z "$KEYSTORE_BASE64" || -z "$STORE_PASSWORD" ]]; then
+            echo 'COLLECTOR_SIGNING_SECRET_MISSING'
+            exit 1
+          fi
+          temp="$RUNNER_TEMP/collector-signing-check.p12"
+          if ! printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$temp"; then
+            echo 'COLLECTOR_SIGNING_BASE64_INVALID'
+            exit 1
+          fi
+          if [[ ! -s "$temp" ]]; then
+            echo 'COLLECTOR_SIGNING_KEYSTORE_EMPTY'
+            exit 1
+          fi
+          actual="$(sha256sum "$temp" | cut -d' ' -f1)"
+          expected='c9a810fc76a9b819132ec6aa4b60e7c3143df2722a70ac5d29f60bf7d9692bc6'
+          if [[ "$actual" != "$expected" ]]; then
+            echo 'COLLECTOR_SIGNING_KEYSTORE_MISMATCH'
+            echo 'Re-enter exact contents of SVOI_COLLECTOR_KEYSTORE_BASE64_ONLY.txt without headers or spaces.'
+            exit 1
+          fi
+          if ! keytool -list -keystore "$temp" -storetype PKCS12 -storepass "$STORE_PASSWORD" -alias svoi-collector >/dev/null 2>&1; then
+            echo 'COLLECTOR_SIGNING_PASSWORD_MISMATCH'
+            echo 'Re-enter the exact password-only line from github-secrets-setup.txt.'
+            exit 1
+          fi
+          rm -f "$temp"
+          echo 'COLLECTOR_SIGNING_SECRETS_VERIFIED'
