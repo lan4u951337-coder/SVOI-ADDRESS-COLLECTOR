@@ -11,7 +11,7 @@ test('official launcher uses exact same 512px brand icon as existing SVOI Taxi a
   assert.ok(existsSync(p),'Original SVOI Taxi launcher icon missing');
   const bytes=readFileSync(p);
   assert.equal(bytes.length,191987);
-  const sha=createHash('sha1').update(Buffer.from('blob '+bytes.length+'\\0')).update(bytes).digest('hex');
+  const sha=createHash('sha1').update(Buffer.from('blob '+bytes.length+String.fromCharCode(0))).update(bytes).digest('hex');
   assert.equal(sha,'4c48e34bf05c12da6912184b091b875c73355840');
   const xml=read('android-driver/address-collector/src/main/AndroidManifest.xml');
   assert.match(xml,/android:icon="@drawable\/svoi_collector_icon"/);
