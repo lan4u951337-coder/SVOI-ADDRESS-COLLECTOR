@@ -43,7 +43,8 @@ jobs:
             'android-driver/address-collector/src/main/assets/team-sync.js',
             'android-driver/address-collector/src/main/java/ru/svoitaxi/addresscollector/CollectorActivity.java',
             'tests/address-collector-map-save-ui.test.mjs',
-            'tests/address-collector-owner.test.mjs'
+            'tests/address-collector-owner.test.mjs',
+            'tests/collector-brand-release.test.mjs'
           }
           actual=set(subprocess.check_output(['git','ls-files'],text=True).splitlines())
           extra=actual-allow
@@ -95,7 +96,7 @@ jobs:
         run: |
           set -euo pipefail
           for file in android-driver/address-collector/src/main/assets/*.js; do node --check "$file"; done
-          node --test tests/address-collector-owner.test.mjs tests/address-collector-map-save-ui.test.mjs
+          node --test tests/address-collector-owner.test.mjs tests/address-collector-map-save-ui.test.mjs tests/collector-brand-release.test.mjs
 
       - name: Build only standalone address-collector APK
         working-directory: android-driver
