@@ -62,3 +62,5 @@ gradle :address-collector:assembleDebug
 - Не переносите Git-историю основного закрытого репозитория в этот публичный проект.
 - Не добавляйте `.env`, токены, `*.jks`, реальные выгрузки GeoJSON/CSV и любые учетные данные.
 - Серверную часть адресной базы и основной проект такси оставляем в приватном репозитории.
+
+<!-- Official Android 0.8 release: re-run GitHub Actions after configuring protected repository signing secrets. -->
