@@ -2,7 +2,9 @@ name: Build and sign SVOI address collector 0.8
 
 on:
   push:
-    branches: [main, feature/collector-official-brand-signing-20261117]
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 # Public repository only. No VPS credentials, no production deployment.
@@ -57,14 +59,14 @@ jobs:
             echo 'Unexpected private material'; exit 1;
           }
 
-      - name: Verify original public SVOI Taxi launcher icon
+      - name: Verify approved SVOI address pin launcher icon
         shell: bash
         run: |
           set -euo pipefail
           ICON=android-driver/address-collector/src/main/res/drawable-nodpi/svoi_collector_icon.png
           test -s "$ICON"
-          test "$(git hash-object "$ICON")" = 4c48e34bf05c12da6912184b091b875c73355840
-          echo 'SVOI_ORIGINAL_BRAND_ICON_VERIFIED'
+          test "$(git hash-object "$ICON")" = 2940c67071b6431bbacce66556dc832fc7b7e4f1
+          echo 'SVOI_APPROVED_ADDRESS_PIN_ICON_VERIFIED'
 
       - uses: actions/setup-node@v7
         with:
@@ -161,7 +163,7 @@ jobs:
         run: |
           set -euo pipefail
           ICON=android-driver/address-collector/src/main/res/drawable-nodpi/svoi_collector_icon.png
-          test "$(git hash-object "$ICON")" = 4c48e34bf05c12da6912184b091b875c73355840
+          test "$(git hash-object "$ICON")" = 2940c67071b6431bbacce66556dc832fc7b7e4f1
           grep -F 'applicationId = "ru.svoitaxi.collector"' android-driver/address-collector/build.gradle.kts
           grep -F 'versionName = "0.8.0"' android-driver/address-collector/build.gradle.kts
 
