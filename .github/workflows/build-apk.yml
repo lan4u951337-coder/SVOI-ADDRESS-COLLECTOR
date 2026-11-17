@@ -2,7 +2,9 @@ name: Build and sign SVOI address collector 0.8
 
 on:
   push:
-    branches: [main, feature/collector-official-brand-signing-20261117]
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 # Public repository only. No VPS credentials, no production deployment.
