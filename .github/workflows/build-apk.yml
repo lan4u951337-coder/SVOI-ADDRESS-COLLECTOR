@@ -32,6 +32,7 @@ jobs:
           import subprocess
           allow={
             '.github/workflows/build-apk.yml','.gitignore','README.md',
+            '.github/workflows/validate-collector-signing.yml',
             'package.json','android-driver/settings.gradle.kts',
             'android-driver/build.gradle.kts','android-driver/gradle.properties',
             'android-driver/address-collector/build.gradle.kts',
