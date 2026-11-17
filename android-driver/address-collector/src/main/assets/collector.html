@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1310">
+<title>СВОИ ТАКСИ · Сбор адресов</title>
+<link rel="stylesheet" href="/collector.css">
+<link rel="stylesheet" href="/maplibre-gl.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="logo">📍</span><div>
+    <strong>СВОИ ТАКСИ</strong>
+    <span>Сбор адресов · тестовая версия</span>
+  </div></div>
+  <div class="count" id="headerCount">0 адресов</div>
+</header>
+<main>
+  <div class="safety">⚠️ Координаты фиксируйте только после полной остановки автомобиля. Точка GPS может находиться на дороге — уточните положение дома или подъезда на карте.</div>
+  <section class="panel gps-panel" aria-label="GPS">
+    <div class="section-head"><h2>Местоположение</h2><span id="gpsBadge" class="tag">GPS: ожидание</span></div>
+    <p id="gpsReadout" class="gps-readout" aria-live="polite">Определяем координаты телефона…</p>
+    <p id="gpsDiagnostic" class="gps-diagnostic warn" aria-live="polite">Запрашиваем координаты Android…</p>
+    <div class="actions"><button id="useGps" class="primary">◎ Взять текущую GPS-точку</button><button id="precisionBtn" class="secondary">◎ Уточнить GPS (30 сек.)</button><button id="retryGps" class="secondary">↻ Повторить поиск GPS</button><button id="gpsSettings" class="secondary">⚙ Настройки GPS</button><button id="viewMe" class="secondary">⌖ Я на карте</button></div>
+    <p class="gps-precision" id="precisionInfo" hidden aria-live="polite"></p>
+    <div id="selectedLocation" class="selected">Точка адреса ещё не выбрана.</div>
+  </section>
+  <section class="panel team-panel" aria-label="Общий сбор">
+    <div class="section-head"><h2>Общая карта команды</h2><span id="sharedCount" class="tag">0 адресов в общей базе</span></div>
+    <p class="hint">У каждого сборщика свой ключ доступа. Подключитесь один раз — адреса других участников появятся зелёными на карте. Без сети свои адреса сохраняются на телефоне.</p>
+    <div class="form-grid">
+      <label>Имя сборщика<input id="collectorName" placeholder="Имя, как выдал руководитель" autocomplete="off" maxlength="60"></label>
+      <label>Личный ключ доступа<input id="collectorSecret" type="password" placeholder="Ваш ключ для общей карты" autocomplete="off" maxlength="256"></label>
+    </div>
+    <div class="actions"><button id="syncConnection" class="primary">Подключить</button><button id="syncNow" class="secondary">↻ Синхронизировать</button></div>
+    <p id="syncStatus" class="sync-status warn" role="status">Не подключено</p>
+    <p id="syncPending" class="hint">На отправку: 0</p>
+    <div id="syncTeamStats" class="team-stats" aria-label="Статистика сборщиков"></div>
+  </section>
+  <section class="panel">
+    <div class="section-head"><h2>Новый адрес</h2><span class="tag" id="editBadge">Новая точка</span></div>
+    <div class="form-grid">
+      <label>Населённый пункт<input id="settlement" value="Агинское" maxlength="120" autocomplete="off"></label>
+      <label>Улица<input id="street" placeholder="Например, Ленина" maxlength="160" autocomplete="off"></label>
+      <label>Номер дома<input id="house" placeholder="10А" maxlength="50" autocomplete="off"></label>
+      <label>Подъезд / ориентир<input id="entrance" placeholder="Подъезд 2 / въезд со двора" maxlength="50" autocomplete="off"></label>
+    </div>
+    <label>Что именно отмечаем?
+      <select id="pointType"><option value="дом">Дом</option><option value="вход">Вход</option><option value="въезд">Подъезд / въезд</option></select>
+    </label>
+    <label>Заметка (необязательно)<textarea id="comment" placeholder="Например, дом за магазином; вход со двора" maxlength="500" rows="2"></textarea></label>
+    <p id="saveFeedback" class="save-feedback" role="status" aria-live="assertive" hidden></p>
+    <div class="actions"><button id="savePoint" class="primary big">✓ Сохранить адрес</button><button id="resetForm" class="secondary">Очистить форму</button></div>
+    <p class="hint">Заполните улицу и номер дома, затем выберите GPS или точку вручную на карте. Без сети адрес сохранится на телефоне.</p>
+  </section>
+  <section class="panel">
+    <div class="section-head"><h2>Карта собранных домов</h2><span class="tag good">Зелёные — сохранены</span></div>
+    <p class="hint map-legend"><span class="legend-dot legend-dot--saved"></span> Зелёные с номерами — сохранённые дома. <span class="legend-dot legend-dot--draft"></span> Жёлтая метка — выбранная точка до сохранения. <span class="legend-dot legend-dot--gps"></span> Синяя — GPS телефона.</p>
+    <div class="actions"><button id="pickMap" class="secondary">📍 Поставить точку вручную</button><button id="cancelPick" class="secondary" hidden>Отмена</button></div>
+    <p class="hint" id="mapInstruction">Для точного расположения дома можно выбрать метку вручную на карте.</p>
+    <div class="map-shell">
+      <div id="map" aria-label="Карта Агинского и сохранённых адресов"></div>
+      <div id="mapStatus" class="map-status">Загружаем карту…</div>
+    </div>
+    <div id="mapSaveRow" class="map-save-row" hidden>
+      <p id="mapSaveInstruction">Ручная точка выбрана. Проверьте улицу и номер дома.</p>
+      <button id="saveFromMap" class="primary big">✓ Сохранить адрес по точке</button>
+      <p id="mapSaveFeedback" class="save-feedback" role="status" aria-live="assertive" hidden></p>
+    </div>
+    <p class="hint">При отсутствии интернета подложка может не загрузиться; введённые адреса и GPS сохранятся локально.</p>
+  </section>
+  <section class="panel">
+    <div class="section-head"><h2>Адреса на карте</h2><span id="listCount" class="tag">0 точек</span></div>
+    <label>Найти в собранных<input id="filter" placeholder="Улица, дом, населённый пункт" autocomplete="off"></label>
+    <div id="addressList" class="address-list"></div>
+  </section>
+  <section class="panel backup">
+    <div class="section-head"><h2>Резервная копия</h2><span class="tag strong-tag">Важно</span></div>
+    <p>Свои записи сохраняются на этом телефоне. Если подключена общая база, приложение автоматически отправляет их на сервер и загружает общие точки. До подтверждённой синхронизации адрес считается только локальным. Каждые 20–30 домов сохраняйте GeoJSON на отдельный носитель.</p>
+    <div class="actions"><button id="exportGeo" class="primary">↓ Сохранить GeoJSON</button><button id="exportCsv" class="secondary">↓ CSV для Excel</button><button id="importGeo" class="secondary">↑ Восстановить GeoJSON</button></div>
+  </section>
+  <div id="notice" class="notice" role="status" aria-live="polite"></div>
+  <footer>СВОИ ТАКСИ · Полевой сбор адресов · Без доступа к заказам, водителям и диспетчерской</footer>
+</main>
+<script src="/maplibre-gl.js"></script>
+<script src="/address-core.js"></script>
+<script src="/gps-quality.js"></script>
+<script src="/collector.js"></script>
+<script src="/team-sync.js"></script>
+</body>
+</html>

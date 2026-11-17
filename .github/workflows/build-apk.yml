@@ -1,0 +1,124 @@
+name: Build SVOI address collector 0.7 APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Public repository only. No VPS credentials, no production deployment.
+permissions:
+  contents: read
+
+concurrency:
+  group: standalone-collector-apk
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check public-only source and prevent accidental private files
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess
+          allow={
+            '.github/workflows/build-apk.yml','.gitignore','README.md',
+            'package.json','android-driver/settings.gradle.kts',
+            'android-driver/build.gradle.kts','android-driver/gradle.properties',
+            'android-driver/address-collector/build.gradle.kts',
+            'android-driver/address-collector/src/main/AndroidManifest.xml',
+            'android-driver/address-collector/src/main/assets/address-core.js',
+            'android-driver/address-collector/src/main/assets/collector.css',
+            'android-driver/address-collector/src/main/assets/collector.html',
+            'android-driver/address-collector/src/main/assets/collector.js',
+            'android-driver/address-collector/src/main/assets/gps-quality.js',
+            'android-driver/address-collector/src/main/assets/team-sync.js',
+            'android-driver/address-collector/src/main/java/ru/svoitaxi/addresscollector/CollectorActivity.java',
+            'tests/address-collector-map-save-ui.test.mjs',
+            'tests/address-collector-owner.test.mjs'
+          }
+          actual=set(subprocess.check_output(['git','ls-files'],text=True).splitlines())
+          extra=actual-allow
+          missing=allow-actual
+          if extra or missing:
+            raise SystemExit(f'PUBLIC_BUNDLE_REFUSED extra={sorted(extra)} missing={sorted(missing)}')
+          print('PUBLIC_COLLECTOR_SOURCE_ALLOWLIST_PASSED')
+          PY
+          ! git ls-files | grep -Ei '(^|/)(\.env|secrets|database|prod|backend|server|api|deploy|driver|client)(/|$)' || {
+            echo 'Unexpected private material'; exit 1;
+          }
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          gradle-version: '9.5.0'
+
+      - uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK and pinned public map library
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+          npm install --ignore-scripts --no-audit --no-fund
+          test "$(wc -c < node_modules/maplibre-gl/dist/maplibre-gl.js)" -gt 200000
+          test "$(wc -c < node_modules/maplibre-gl/dist/maplibre-gl.css)" -gt 2000
+
+      - name: Run Android collector regression checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in android-driver/address-collector/src/main/assets/*.js; do node --check "$file"; done
+          node --test tests/address-collector-owner.test.mjs tests/address-collector-map-save-ui.test.mjs
+
+      - name: Build only standalone address-collector APK
+        working-directory: android-driver
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle :address-collector:assembleDebug --no-daemon --max-workers=2 --no-parallel
+
+      - name: Check APK identity and bundled map
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=android-driver/address-collector/build/outputs/apk/debug/address-collector-debug.apk
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" | grep -F "package: name='ru.svoitaxi.addresscollector.preview'"
+          python3 - <<'PY'
+          from zipfile import ZipFile
+          p='android-driver/address-collector/build/outputs/apk/debug/address-collector-debug.apk'
+          with ZipFile(p) as z:
+            required=['assets/collector.html','assets/collector.css','assets/collector.js',
+              'assets/team-sync.js','assets/address-core.js','assets/gps-quality.js',
+              'assets/maplibre-gl.js','assets/maplibre-gl.css']
+            for f in required: assert f in z.namelist(),f
+            js=z.read('assets/collector.js')
+            assert b'renderHouseNumbers' in js
+            assert b'saveFromMap' in js
+            assert len(z.read('assets/maplibre-gl.js'))>200_000
+          print('PUBLIC_COLLECTOR_0_7_APK_READY')
+          PY
+          sha256sum "$APK"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: SVOI-ADDRESS-COLLECTOR-0.7-PREVIEW-APK
+          path: android-driver/address-collector/build/outputs/apk/debug/address-collector-debug.apk
+          if-no-files-found: error
+          retention-days: 14

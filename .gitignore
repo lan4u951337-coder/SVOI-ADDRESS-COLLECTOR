@@ -1,0 +1,19 @@
+# Never commit credentials, real address exports or private keys.
+.env
+.env.*
+*.jks
+*.keystore
+*.key
+*.pem
+local.properties
+node_modules/
+.gradle/
+**/build/
+*.apk
+*.aab
+*.geojson
+*.csv
+*.sqlite
+*.db
+.DS_Store
+.idea/

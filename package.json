@@ -1,0 +1,10 @@
+{
+  "name": "svoi-address-collector-public-build",
+  "version": "0.7.0",
+  "private": true,
+  "type": "module",
+  "description": "Isolated Android address collector APK build; no taxi backend or credentials",
+  "dependencies": {
+    "maplibre-gl": "4.7.1"
+  }
+}
