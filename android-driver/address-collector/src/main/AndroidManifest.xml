@@ -5,8 +5,10 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <application
-        android:label="СВОИ · Сбор адресов 0.7"
+        android:label="СВОИ · Сбор адресов"
         android:allowBackup="false"
+        android:icon="@drawable/svoi_collector_icon"
+        android:roundIcon="@drawable/svoi_collector_icon"
         android:hardwareAccelerated="true"
         android:usesCleartextTraffic="false"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">

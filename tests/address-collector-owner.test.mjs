@@ -19,7 +19,7 @@ const sample=(overrides={})=>({
 test('address collector has an isolated APK id and no driver login/line permissions',()=>{
   const manifest=read('android-driver/address-collector/src/main/AndroidManifest.xml');
   const build=read('android-driver/address-collector/build.gradle.kts');
-  assert.match(build,/applicationId = "ru\.svoitaxi\.addresscollector\.preview"/);
+  assert.match(build,/applicationId = "ru\.svoitaxi\.collector"/);
   assert.doesNotMatch(build,/applicationId = "ru\.svoitaxi\.driver"/);
   assert.match(manifest,/ACCESS_FINE_LOCATION/);
   assert.doesNotMatch(manifest,/POST_NOTIFICATIONS|FOREGROUND_SERVICE|MESSAGING_EVENT|DriverLocationService/);

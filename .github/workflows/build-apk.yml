@@ -1,8 +1,8 @@
-name: Build SVOI address collector 0.7 APK
+name: Build and sign SVOI address collector 0.8
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/collector-official-brand-signing-20261117]
   workflow_dispatch:
 
 # Public repository only. No VPS credentials, no production deployment.
@@ -15,6 +15,8 @@ concurrency:
 
 jobs:
   apk:
+    outputs:
+      signing_ready: ${{ steps.signing_gate.outputs.ready }}
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
@@ -32,6 +34,7 @@ jobs:
             'android-driver/build.gradle.kts','android-driver/gradle.properties',
             'android-driver/address-collector/build.gradle.kts',
             'android-driver/address-collector/src/main/AndroidManifest.xml',
+            'android-driver/address-collector/src/main/res/drawable-nodpi/svoi_collector_icon.png',
             'android-driver/address-collector/src/main/assets/address-core.js',
             'android-driver/address-collector/src/main/assets/collector.css',
             'android-driver/address-collector/src/main/assets/collector.html',
@@ -40,7 +43,8 @@ jobs:
             'android-driver/address-collector/src/main/assets/team-sync.js',
             'android-driver/address-collector/src/main/java/ru/svoitaxi/addresscollector/CollectorActivity.java',
             'tests/address-collector-map-save-ui.test.mjs',
-            'tests/address-collector-owner.test.mjs'
+            'tests/address-collector-owner.test.mjs',
+            'tests/collector-brand-release.test.mjs'
           }
           actual=set(subprocess.check_output(['git','ls-files'],text=True).splitlines())
           extra=actual-allow
@@ -52,6 +56,15 @@ jobs:
           ! git ls-files | grep -Ei '(^|/)(\.env|secrets|database|prod|backend|server|api|deploy|driver|client)(/|$)' || {
             echo 'Unexpected private material'; exit 1;
           }
+
+      - name: Verify original public SVOI Taxi launcher icon
+        shell: bash
+        run: |
+          set -euo pipefail
+          ICON=android-driver/address-collector/src/main/res/drawable-nodpi/svoi_collector_icon.png
+          test -s "$ICON"
+          test "$(git hash-object "$ICON")" = 4c48e34bf05c12da6912184b091b875c73355840
+          echo 'SVOI_ORIGINAL_BRAND_ICON_VERIFIED'
 
       - uses: actions/setup-node@v7
         with:
@@ -83,7 +96,7 @@ jobs:
         run: |
           set -euo pipefail
           for file in android-driver/address-collector/src/main/assets/*.js; do node --check "$file"; done
-          node --test tests/address-collector-owner.test.mjs tests/address-collector-map-save-ui.test.mjs
+          node --test tests/address-collector-owner.test.mjs tests/address-collector-map-save-ui.test.mjs tests/collector-brand-release.test.mjs
 
       - name: Build only standalone address-collector APK
         working-directory: android-driver
@@ -99,7 +112,7 @@ jobs:
           APK=android-driver/address-collector/build/outputs/apk/debug/address-collector-debug.apk
           test -s "$APK"
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$APK"
-          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" | grep -F "package: name='ru.svoitaxi.addresscollector.preview'"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" | grep -F "package: name='ru.svoitaxi.collector'"
           python3 - <<'PY'
           from zipfile import ZipFile
           p='android-driver/address-collector/build/outputs/apk/debug/address-collector-debug.apk'
@@ -112,55 +125,140 @@ jobs:
             assert b'renderHouseNumbers' in js
             assert b'saveFromMap' in js
             assert len(z.read('assets/maplibre-gl.js'))>200_000
-          print('PUBLIC_COLLECTOR_0_7_APK_READY')
+          print('PUBLIC_COLLECTOR_0_8_DEBUG_BUILD_VERIFIED')
           PY
           sha256sum "$APK"
 
-      - uses: actions/upload-artifact@v7
-        with:
-          name: SVOI-ADDRESS-COLLECTOR-0.7-PREVIEW-APK
-          path: android-driver/address-collector/build/outputs/apk/debug/address-collector-debug.apk
-          if-no-files-found: error
-          retention-days: 14
+      - name: Check whether protected official signing key is configured
+        id: signing_gate
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.COLLECTOR_RELEASE_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.COLLECTOR_RELEASE_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$KEYSTORE_BASE64" && -n "$STORE_PASSWORD" ]]; then
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
+            echo 'OFFICIAL_SIGNING_CONFIGURED'
+          else
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            echo 'OFFICIAL_SIGNING_NOT_CONFIGURED; debug checks only, NO official APK published'
+          fi
 
   release:
-    name: Publish direct APK download in GitHub Releases
+    name: Sign permanent official APK and publish to stable download
     needs: apk
-    if: ${{ github.ref == 'refs/heads/main' }}
+    if: ${{ github.ref == 'refs/heads/main' && needs.apk.outputs.signing_ready == 'true' }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 40
     permissions:
       contents: write
     steps:
-      - name: Download tested APK from current build
-        uses: actions/download-artifact@v7
-        with:
-          name: SVOI-ADDRESS-COLLECTOR-0.7-PREVIEW-APK
-          path: release
+      - uses: actions/checkout@v7
 
-      - name: Publish stable public direct APK link (no Actions login required)
+      - name: Verify official source identity and icon
+        shell: bash
+        run: |
+          set -euo pipefail
+          ICON=android-driver/address-collector/src/main/res/drawable-nodpi/svoi_collector_icon.png
+          test "$(git hash-object "$ICON")" = 4c48e34bf05c12da6912184b091b875c73355840
+          grep -F 'applicationId = "ru.svoitaxi.collector"' android-driver/address-collector/build.gradle.kts
+          grep -F 'versionName = "0.8.0"' android-driver/address-collector/build.gradle.kts
+
+      - name: Refuse to overwrite a published release tag
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          source=release/address-collector-debug.apk
-          asset=release/SVOI-Address-Collector-0.7-preview.apk
-          test -s "$source"
-          mv "$source" "$asset"
-          sha256sum "$asset"
-          tag=v0.7.0-preview
-          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$tag" "$asset" --repo "$GITHUB_REPOSITORY" --clobber
-          else
-            gh release create "$tag" "$asset" \
-              --repo "$GITHUB_REPOSITORY" \
-              --target "$GITHUB_SHA" \
-              --title 'СВОИ ТАКСИ — Сбор адресов 0.7 (тест)' \
-              --notes 'Тестовая APK версия 0.7. Ручные точки сохраняются без GPS, номера домов на общей карте, ошибки сохранения рядом с кнопкой. Устанавливается рядом со старым сборщиком. Старое приложение не удалять.' \
-              --prerelease
+          if gh release view v0.8.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Official v0.8.0 release already exists; bump version/tag to publish future updates.'
+            exit 1
           fi
-          url="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[] | select(.name == "SVOI-Address-Collector-0.7-preview.apk") | .url')"
-          test -n "$url"
-          echo "DIRECT_APK_DOWNLOAD=$url"
-          echo 'PUBLIC_COLLECTOR_RELEASE_APK_READY'
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          gradle-version: '9.5.0'
+
+      - uses: android-actions/setup-android@v4
+
+      - name: Prepare release dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+          npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Build official APK using protected, non-ephemeral signing key
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.COLLECTOR_RELEASE_KEYSTORE_BASE64 }}
+          SVOI_COLLECTOR_RELEASE_STORE_PASSWORD: ${{ secrets.COLLECTOR_RELEASE_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          export SVOI_COLLECTOR_RELEASE_STORE_FILE="$RUNNER_TEMP/svoi-collector-release.p12"
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$SVOI_COLLECTOR_RELEASE_STORE_FILE"
+          unset KEYSTORE_BASE64
+          test -s "$SVOI_COLLECTOR_RELEASE_STORE_FILE"
+          keytool -list -keystore "$SVOI_COLLECTOR_RELEASE_STORE_FILE" \
+            -storetype PKCS12 -storepass "$SVOI_COLLECTOR_RELEASE_STORE_PASSWORD" \
+            -alias svoi-collector >/dev/null
+          cd android-driver
+          gradle :address-collector:assembleRelease --no-daemon --max-workers=2 --no-parallel
+
+      - name: Verify correct official package, stable signing certificate and icon
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=android-driver/address-collector/build/outputs/apk/release/address-collector-release.apk
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$APK" \
+            | tr '[:upper:]' '[:lower:]' \
+            | grep -F '7f57730bcaa2648a725cf11264a8a2829fd0a16bc1d06e55ed1cefd4371b1063'
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" \
+            | grep -F "package: name='ru.svoitaxi.collector' versionCode='8' versionName='0.8.0'"
+          python3 - <<'PY'
+          from zipfile import ZipFile
+          p='android-driver/address-collector/build/outputs/apk/release/address-collector-release.apk'
+          with ZipFile(p) as z:
+            assets=z.namelist()
+            for f in ('assets/collector.html','assets/collector.js','assets/team-sync.js','assets/maplibre-gl.js'):
+              assert f in assets, f
+            assert any(x.endswith('/svoi_collector_icon.png') for x in assets), 'Launcher icon missing from APK'
+            js=z.read('assets/collector.js')
+            assert b'renderHouseNumbers' in js
+            assert b'saveFromMap' in js
+          print('SVOI_OFFICIAL_COLLECTOR_APK_VERIFIED')
+          PY
+          install -d release
+          cp "$APK" release/SVOI-Address-Collector.apk
+          sha256sum release/SVOI-Address-Collector.apk
+
+      - name: Publish versioned stable release and permanent driver download URL
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create v0.8.0 release/SVOI-Address-Collector.apk \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title 'СВОИ ТАКСИ — Сбор адресов 0.8 (основная)' \
+            --notes 'Основная сборка с фирменной иконкой СВОИ ТАКСИ, ручным сохранением, номерами домов и командной синхронизацией. Устанавливается рядом с прежними тестовыми версиями: не удаляйте их, пока не проверите перенос адресов. Подписана постоянным отдельным ключом сборщика.' \
+            --latest
+          test -n "$(gh release view v0.8.0 --repo "$GITHUB_REPOSITORY" --json assets \
+            --jq '.assets[] | select(.name == "SVOI-Address-Collector.apk") | .url')"
+          echo 'SVOI_COLLECTOR_OFFICIAL_RELEASE_PUBLISHED'
+          echo 'OFFICIAL_APK_URL=https://github.com/lan4u951337-coder/SVOI-ADDRESS-COLLECTOR/releases/latest/download/SVOI-Address-Collector.apk'

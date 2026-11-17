@@ -2,20 +2,46 @@ plugins {
     id("com.android.application")
 }
 
+// Signing material is never stored in this public repository. Set both
+// environment variables from GitHub Actions repository secrets.
+val releaseStorePath = System.getenv("SVOI_COLLECTOR_RELEASE_STORE_FILE")
+val releaseStorePassword = System.getenv("SVOI_COLLECTOR_RELEASE_STORE_PASSWORD")
+val releaseSigningReady = !releaseStorePath.isNullOrBlank() && !releaseStorePassword.isNullOrBlank()
+
 android {
     namespace = "ru.svoitaxi.addresscollector"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "ru.svoitaxi.addresscollector.preview"
+        applicationId = "ru.svoitaxi.collector"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.7-preview-public-build"
+        versionCode = 8
+        versionName = "0.8.0"
     }
 
     buildFeatures {
         buildConfig = false
+    }
+
+    signingConfigs {
+        if (releaseSigningReady) {
+            create("collectorRelease") {
+                storeFile = file(releaseStorePath!!)
+                storePassword = releaseStorePassword!!
+                keyAlias = "svoi-collector"
+                keyPassword = releaseStorePassword
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            if (releaseSigningReady) {
+                signingConfig = signingConfigs.getByName("collectorRelease")
+            }
+        }
     }
 
     sourceSets.getByName("main").assets.srcDir("build/generated/collector-maplibre")
@@ -43,4 +69,12 @@ tasks.named("preBuild") {
 
 dependencies {
     implementation("androidx.webkit:webkit:1.14.0")
+}
+
+tasks.matching { it.name == "packageRelease" }.configureEach {
+    doFirst {
+        if (!releaseSigningReady) {
+            throw GradleException("Refusing unsigned official release: protected signing credentials missing")
+        }
+    }
 }
