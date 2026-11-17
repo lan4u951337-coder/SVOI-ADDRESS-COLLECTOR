@@ -6,13 +6,13 @@ const root=new URL('../',import.meta.url);
 const read=path=>readFileSync(new URL(path,root),'utf8');
 const iconPath='android-driver/address-collector/src/main/res/drawable-nodpi/svoi_collector_icon.png';
 
-test('official launcher uses exact same 512px brand icon as existing SVOI Taxi apps',()=>{
+test('address collector launcher uses approved СВОИ address-pin brand icon',()=>{
   const p=new URL(iconPath,root);
-  assert.ok(existsSync(p),'Original SVOI Taxi launcher icon missing');
+  assert.ok(existsSync(p),'Approved СВОИ address-pin launcher icon missing');
   const bytes=readFileSync(p);
-  assert.equal(bytes.length,191987);
+  assert.equal(bytes.length,5369);
   const sha=createHash('sha1').update(Buffer.from('blob '+bytes.length+String.fromCharCode(0))).update(bytes).digest('hex');
-  assert.equal(sha,'4c48e34bf05c12da6912184b091b875c73355840');
+  assert.equal(sha,'2940c67071b6431bbacce66556dc832fc7b7e4f1');
   const xml=read('android-driver/address-collector/src/main/AndroidManifest.xml');
   assert.match(xml,/android:icon="@drawable\/svoi_collector_icon"/);
   assert.match(xml,/android:roundIcon="@drawable\/svoi_collector_icon"/);
