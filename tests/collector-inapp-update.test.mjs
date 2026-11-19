@@ -36,6 +36,7 @@ test('download verifies official stable GitHub release, SHA-256, APK identity an
     'SVOI-Address-Collector.apk','browser_download_url',
     'MessageDigest.getInstance("SHA-256")',
     'getPackageArchiveInfo','archive.packageName',
+    'svoi-update-pending.apk',
     'getApkContentsSigners','release.digest',
     'Arrays.equals(target[0].toByteArray(),original[0].toByteArray())',
     'newCode<=oldCode',
