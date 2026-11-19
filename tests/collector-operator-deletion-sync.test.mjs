@@ -18,6 +18,7 @@ function create({existing=[sample],synced=true,total=0,addresses=[],postDeleted=
   if(!store.has(CREDENTIALS))store.set(CREDENTIALS,JSON.stringify({name:'Сергей',secret:'x'.repeat(32)}));
   if(!store.has(SYNC)&&synced)store.set(SYNC,JSON.stringify({[sample.id]:'previously-uploaded-digest'}));
   const requests=[],events=new Map(),nodes=new Map(),uiUpdates=[];
+  let remoteAddresses=addresses.slice(),remoteTotal=total;
   const element=id=>{
     if(!nodes.has(id))nodes.set(id,{
       id,value:'',textContent:'',className:'',disabled:false,handlers:new Map(),
@@ -46,8 +47,14 @@ function create({existing=[sample],synced=true,total=0,addresses=[],postDeleted=
     fetch:async (_url,opts)=>{
       const method=opts.method||'GET';
       requests.push({method,body:opts.body?JSON.parse(opts.body):null});
+      if(method==='POST'&&!postDeleted){
+        const record=JSON.parse(opts.body).record;
+        if(!remoteAddresses.some(r=>r.id===record.id)){
+          remoteAddresses.push(record);remoteTotal++;
+        }
+      }
       const response=method==='GET'?
-        {ok:true,addresses,stats:[],total}:method==='POST'?
+        {ok:true,addresses:remoteAddresses,stats:[],total:remoteTotal}:method==='POST'?
         {ok:true,deleted:postDeleted}: {ok:true};
       return {ok:true,status:200,json:async()=>response};
     },
@@ -82,7 +89,7 @@ test('never hide a local point based on truncated or incomplete server snapshot'
   const app=create({total:10001,addresses:[]});
   await app.sync();
   assert.equal(app.window.SvoiTeamSync.isLocalHidden(sample.id),false);
-  assert.equal(app.store.has(HIDDEN),false);
+  assert.deepEqual(JSON.parse(app.store.get(HIDDEN)||'[]'),[]);
 });
 
 test('unsent offline local point stays visible and uploads when server is empty',async()=>{
