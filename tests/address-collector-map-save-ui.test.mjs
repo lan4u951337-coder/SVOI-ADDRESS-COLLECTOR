@@ -212,3 +212,29 @@ test('remote point is explicitly read-only to collectors',()=>{
   const item=app.$('addressList').children[0];
   assert.equal(item.children[1].textContent,'Общая точка · удалить из общей базы может диспетчер');
 });
+
+test('address rows stack full-width on narrow screens instead of squeezing address next to dispatcher note',()=>{
+  assert.match(html,/<section class="panel address-section">\s*<div class="section-head"><h2>Адреса на карте<\/h2>/);
+  assert.match(css,/\.addr-item\{display:flex;flex-direction:column;align-items:stretch/);
+  assert.match(css,/\.addr-title\{[^}]*word-break:normal;overflow-wrap:break-word/);
+  assert.match(css,/\.addr-item > \.addr-meta\{[^}]*border-top:/);
+  assert.match(css,/\.addr-actions\{display:flex;flex-wrap:wrap/);
+  assert.match(css,/\.address-section \.section-head\{display:flex;flex-direction:column/);
+  assert.match(css,/\.address-section #listCount\{[^}]*white-space:normal/);
+  assert.doesNotMatch(css,/\.addr-item\{display:grid;grid-template-columns:1fr auto/);
+});
+
+test('shared collector point keeps its address and dispatcher note as separate card children',()=>{
+  const app=testApp();
+  const point={id:'shared-for-layout',settlement:'Агинское',street:'Строительная',house:'16/2',
+    pointType:'дом',entrance:'',comment:'',lat:55.260139,lng:94.890941,
+    accuracyM:null,source:'map',capturedAt:'2026-11-19T00:00:00.000Z',collectorName:'Сергей'};
+  app.context.window.SvoiTeamSync={getSharedRows:()=>[point]};
+  app.context.window.SvoiCollector.refreshShared();
+  const card=app.$('addressList').children[0];
+  assert.equal(card.className,'addr-item');
+  assert.equal(card.children.length,2);
+  assert.equal(card.children[0].children[0].textContent,'Строительная, 16/2 · Агинское');
+  assert.match(card.children[1].textContent,/удалить из общей базы может диспетчер/);
+  assert.equal(card.children[1].className,'addr-meta');
+});
