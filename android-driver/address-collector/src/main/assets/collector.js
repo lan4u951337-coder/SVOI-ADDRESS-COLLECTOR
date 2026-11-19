@@ -11,6 +11,7 @@ let nativeActive=false,gpsStatus='Запрашиваем координаты т
 let precision=null;
 let map=null,gpsMarker=null,chosenMarker=null,mapLoaded=false,lastMapError=0;
 let alertTimer=null,lowAccuracyArmed=false;
+let updatePromptVersion='',updateDismissedVersion='',lastUpdateCheckAt=0;
 const numberMarkers=new Map(),MAX_NUMBER_MARKERS=220;
 function msg(text){
   $('notice').textContent=text;
@@ -32,13 +33,45 @@ function showSaveFeedback(message,kind='bad',fieldId=''){
 }
 function onUpdateStatus(payload){
   if(!payload||typeof payload!=='object')return;
-  $('updateInfo').textContent=String(payload.message||'Проверка обновлений завершена.');
   const state=String(payload.state||'');
+  const message=String(payload.message||'Проверка обновлений завершена.');
+  const version=String(payload.version||'');
+  $('updateInfo').textContent=message;
   $('installUpdate').hidden=!['available','ready','permission','downloading'].includes(state);
   $('installUpdate').disabled=state==='downloading'||state==='checking';
   $('installUpdate').textContent=state==='permission'?'Продолжить обновление':
     state==='downloading'?'Загружаем APK…':'Обновить приложение';
   $('checkForUpdates').disabled=state==='checking'||state==='downloading';
+
+  // Native Android verifies that the release is strictly newer before reporting "available".
+  // The prompt must not appear for an up-to-date version or a network error.
+  if(state==='available'&&/^v\\d+\\.\\d+\\.\\d+$/.test(version)&&
+      version!==updateDismissedVersion&&version!==updatePromptVersion){
+    updatePromptVersion=version;
+    $('updateDialogDescription').textContent='Доступна новая версия '+version.slice(1)+' сборщика адресов.';
+    $('updateDialogStatus').textContent='Ваши собранные адреса и ключ доступа сохранятся.';
+    $('updateDialogInstall').textContent='Обновить';
+    $('updateDialogInstall').disabled=false;
+    $('updateDialogLater').disabled=false;
+    $('updateDialog').hidden=false;
+    $('updateDialogInstall').focus();
+  }
+  if(!$('updateDialog').hidden){
+    $('updateDialogStatus').textContent=state==='downloading'?'Загрузка обновления…':
+      state==='permission'?'Разрешите установку из СВОИ в настройках Android и нажмите «Обновить» ещё раз.':
+      state==='ready'?'APK проверен. Подтвердите установку в Android.':
+      message.startsWith('Не удалось загрузить')?message:
+      'Ваши собранные адреса и ключ доступа сохранятся.';
+    $('updateDialogInstall').disabled=state==='downloading'||state==='checking';
+    $('updateDialogInstall').textContent=state==='downloading'?'Загружаем…':
+      state==='permission'?'Продолжить':'Обновить';
+    // Avoid showing a cancel button which would leave a downloading APK installing later.
+    $('updateDialogLater').disabled=state==='downloading';
+  }
+  if(state==='current'||state==='error'){
+    $('updateDialog').hidden=true;
+    updatePromptVersion='';
+  }
 }
 function safeLoad(){
   try{
@@ -510,17 +543,34 @@ $('checkForUpdates').addEventListener('click',()=>{
 $('installUpdate').addEventListener('click',()=>{
   if(window.CollectorNative?.installAvailableUpdate)window.CollectorNative.installAvailableUpdate();
 });
+$('updateDialogInstall').addEventListener('click',()=>{
+  if(window.CollectorNative?.installAvailableUpdate)window.CollectorNative.installAvailableUpdate();
+});
+$('updateDialogLater').addEventListener('click',()=>{
+  updateDismissedVersion=updatePromptVersion;
+  $('updateDialog').hidden=true;
+  $('checkForUpdates').focus();
+});
 $('importGeo').addEventListener('click',()=>{
   if(!window.CollectorNative){msg('Импорт доступен в Android-приложении.');return}
   window.CollectorNative.importGeoJson();
 });
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden)stopGps();
-  else {geoWatch();map?.resize()}
+  else {
+    geoWatch();map?.resize();
+    // Refresh availability on app return after a long pause; never auto-install.
+    if(Date.now()-lastUpdateCheckAt>30*60*1000&&window.CollectorNative?.checkForUpdates){
+      lastUpdateCheckAt=Date.now();
+      window.CollectorNative.checkForUpdates();
+    }
+  }
 });
 window.SvoiCollector=Object.freeze({receiveImport,onNativeLocation,onNativeStatus,onUpdateStatus,localRows:()=>rows,localStorageHealthy:()=>!storageBlocked,refreshShared:()=>{render();refreshMapPoints()},notify:msg});
 rows=safeLoad();render();updateGpsPanel();geoWatch();setupMap();
 // Checking in the background is read-only; download and installation require a tap.
-setTimeout(()=>{if(window.CollectorNative?.checkForUpdates)window.CollectorNative.checkForUpdates()},1600);
+setTimeout(()=>{if(window.CollectorNative?.checkForUpdates){
+  lastUpdateCheckAt=Date.now();window.CollectorNative.checkForUpdates();
+}},1600);
 setInterval(()=>{if(!document.hidden)updateGpsPanel()},10000);
 })();
