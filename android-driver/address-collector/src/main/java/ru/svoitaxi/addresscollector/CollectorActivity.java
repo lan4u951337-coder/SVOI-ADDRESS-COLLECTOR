@@ -37,6 +37,7 @@ public final class CollectorActivity extends Activity {
     private static final int MAX_EXPORT_BYTES = 8_000_000;
 
     private WebView browser;
+    private CollectorUpdater updater;
     private byte[] pendingExport;
     private LocationManager locationManager;
     private final Handler locationHandler = new Handler(Looper.getMainLooper());
@@ -63,6 +64,18 @@ public final class CollectorActivity extends Activity {
             }
         }
     };
+
+    private void sendUpdateStatus(String state,String message,String version){
+        if(browser==null)return;
+        try{
+            JSONObject payload=new JSONObject();
+            payload.put("state",state);
+            payload.put("message",message);
+            payload.put("version",version);
+            browser.evaluateJavascript(
+                "window.SvoiCollector&&window.SvoiCollector.onUpdateStatus("+payload.toString()+")",null);
+        }catch(Exception ignored){}
+    }
 
     private void sendStatus(String code,String message) {
         if(browser==null)return;
@@ -173,6 +186,7 @@ public final class CollectorActivity extends Activity {
         final WebViewAssetLoader loader = new WebViewAssetLoader.Builder()
             .addPathHandler("/",new WebViewAssetLoader.AssetsPathHandler(this)).build();
         browser = new WebView(this);
+        updater = new CollectorUpdater(this,this::sendUpdateStatus);
         browser.setBackgroundColor(0xFF090F0D);
         browser.setLayerType(android.view.View.LAYER_TYPE_HARDWARE,null);
         setContentView(browser);
@@ -243,6 +257,16 @@ public final class CollectorActivity extends Activity {
         @JavascriptInterface
         public void exportCsv(String data){
             export(data,"text/csv","svoi-adresa.csv");
+        }
+
+        @JavascriptInterface
+        public void checkForUpdates(){
+            runOnUiThread(()->{if(updater!=null)updater.check();});
+        }
+
+        @JavascriptInterface
+        public void installAvailableUpdate(){
+            runOnUiThread(()->{if(updater!=null)updater.install();});
         }
 
         @JavascriptInterface
@@ -336,6 +360,7 @@ public final class CollectorActivity extends Activity {
     protected void onDestroy(){
         stopNativeLocation();
         pendingExport=null;
+        if(updater!=null){updater.close();updater=null;}
         if(browser!=null)browser.destroy();
         super.onDestroy();
     }
