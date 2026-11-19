@@ -6,6 +6,7 @@ const core=window.SvoiAddressCore, quality=window.SvoiGpsQuality;
 const KEY='svoi.addressCollector.records.v1',CENTER=[94.9079,55.2586];
 const $=id=>document.getElementById(id);
 let rows=[],gps=null,watch=null,chosen=null,editId=null,manualMode=false,storageBlocked=false;
+let pendingDeleteId=null,pendingDeleteUntil=0;
 let nativeActive=false,gpsStatus='Запрашиваем координаты телефона…',gpsStatusKind='warn';
 let precision=null;
 let map=null,gpsMarker=null,chosenMarker=null,mapLoaded=false,lastMapError=0;
@@ -28,6 +29,16 @@ function showSaveFeedback(message,kind='bad',fieldId=''){
     node.className='save-feedback '+kind;
   }
   if(fieldId)$(fieldId).setAttribute('aria-invalid','true');
+}
+function onUpdateStatus(payload){
+  if(!payload||typeof payload!=='object')return;
+  $('updateInfo').textContent=String(payload.message||'Проверка обновлений завершена.');
+  const state=String(payload.state||'');
+  $('installUpdate').hidden=!['available','ready','permission','downloading'].includes(state);
+  $('installUpdate').disabled=state==='downloading'||state==='checking';
+  $('installUpdate').textContent=state==='permission'?'Продолжить обновление':
+    state==='downloading'?'Загружаем APK…':'Обновить приложение';
+  $('checkForUpdates').disabled=state==='checking'||state==='downloading';
 }
 function safeLoad(){
   try{
@@ -344,9 +355,23 @@ function render(){
     edit.addEventListener('click',()=>editRecord(rec.id));
     const del=document.createElement('button');del.type='button';del.className='del';del.textContent='×';
     del.setAttribute('aria-label','Удалить '+rec.street+', '+rec.house);
+    del.textContent=pendingDeleteId===rec.id&&Date.now()<pendingDeleteUntil?'Удалить?':'×';
     del.addEventListener('click',()=>{
-      if(confirm('Удалить адрес '+rec.street+', '+rec.house+'? Удаление нельзя отменить без резервной копии.')){
-        if(persist(rows.filter(r=>r.id!==rec.id))){window.SvoiTeamSync?.onLocalDeleted?.(rec.id);msg('Адрес удалён на телефоне. Если включена синхронизация, он будет удалён и из общей базы.');}
+      // Android WebView without a WebChromeClient silently rejects confirm().
+      // Require two deliberate taps instead of a JavaScript modal dialog.
+      const now=Date.now();
+      if(pendingDeleteId!==rec.id||now>pendingDeleteUntil){
+        pendingDeleteId=rec.id;pendingDeleteUntil=now+10000;
+        render();
+        msg('Нажмите «Удалить?» ещё раз в течение 10 секунд: '+rec.street+', '+rec.house+'.');
+        return;
+      }
+      pendingDeleteId=null;pendingDeleteUntil=0;
+      if(persist(rows.filter(r=>r.id!==rec.id))){
+        window.SvoiTeamSync?.onLocalDeleted?.(rec.id);
+        // The old shared snapshot can still contain this ID after local deletion.
+        render();refreshMapPoints();
+        msg('Адрес удалён с телефона. Общая база обновится при синхронизации.');
       }
     });
     actions.append(edit,del);item.append(body,actions);list.appendChild(item);
@@ -459,6 +484,13 @@ for(const field of ['settlement','street','house'])$(field).addEventListener('in
 $('filter').addEventListener('input',render);
 $('exportGeo').addEventListener('click',()=>exportFile('geo'));
 $('exportCsv').addEventListener('click',()=>exportFile('csv'));
+$('checkForUpdates').addEventListener('click',()=>{
+  if(window.CollectorNative?.checkForUpdates)window.CollectorNative.checkForUpdates();
+  else onUpdateStatus({state:'error',message:'Проверка обновлений доступна в Android-приложении версии 0.8.1 и выше.'});
+});
+$('installUpdate').addEventListener('click',()=>{
+  if(window.CollectorNative?.installAvailableUpdate)window.CollectorNative.installAvailableUpdate();
+});
 $('importGeo').addEventListener('click',()=>{
   if(!window.CollectorNative){msg('Импорт доступен в Android-приложении.');return}
   window.CollectorNative.importGeoJson();
@@ -467,7 +499,9 @@ document.addEventListener('visibilitychange',()=>{
   if(document.hidden)stopGps();
   else {geoWatch();map?.resize()}
 });
-window.SvoiCollector=Object.freeze({receiveImport,onNativeLocation,onNativeStatus,localRows:()=>rows,localStorageHealthy:()=>!storageBlocked,refreshShared:()=>{render();refreshMapPoints()},notify:msg});
+window.SvoiCollector=Object.freeze({receiveImport,onNativeLocation,onNativeStatus,onUpdateStatus,localRows:()=>rows,localStorageHealthy:()=>!storageBlocked,refreshShared:()=>{render();refreshMapPoints()},notify:msg});
 rows=safeLoad();render();updateGpsPanel();geoWatch();setupMap();
+// Checking in the background is read-only; download and installation require a tap.
+setTimeout(()=>{if(window.CollectorNative?.checkForUpdates)window.CollectorNative.checkForUpdates()},1600);
 setInterval(()=>{if(!document.hidden)updateGpsPanel()},10000);
 })();
