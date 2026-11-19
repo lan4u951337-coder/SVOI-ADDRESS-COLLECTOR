@@ -23,7 +23,7 @@ test('official app installs separately from older test builds without deleting a
   const html=read('android-driver/address-collector/src/main/assets/collector.html');
   assert.match(gradle,/applicationId = "ru\.svoitaxi\.collector"/);
   assert.match(gradle,/versionCode = 9/);
-  assert.match(gradle,/versionName = "0\.8\.0"/);
+  assert.match(gradle,/versionName = "0\.8\.1"/);
   assert.doesNotMatch(html,/Сбор адресов · тестовая версия/);
   assert.match(html,/Сбор адресов · общая карта/);
 });
@@ -37,7 +37,7 @@ test('official release requires permanent protected signing and never publishes 
   assert.match(workflow,/COLLECTOR_RELEASE_KEYSTORE_PASSWORD/);
   assert.match(workflow,/needs\.apk\.outputs\.signing_ready == 'true'/);
   assert.match(workflow,/SVOI-Address-Collector\.apk/);
-  assert.match(workflow,/gh release create v0\.8\.0/);
+  assert.match(workflow,/gh release create v0\.8\.1/);
   assert.match(workflow,/7f57730bcaa2648a725cf11264a8a2829fd0a16bc1d06e55ed1cefd4371b1063/);
   assert.doesNotMatch(workflow,/sshpass|VPS_ROOT|docker compose|POSTGRES_PASSWORD|DATABASE_URL/);
   assert.ok(workflow.includes(iconPath));
