@@ -149,7 +149,7 @@ function deleteButton(app){
   const item=app.$('addressList').children[0];
   assert.ok(item,'expected an address row');
   const actions=item.children[1];
-  return actions?.children?.find(el=>el.textContent==='×'||el.textContent==='Удалить?');
+  return actions?.children?.find(el=>el.textContent==='Удалить'||el.textContent==='Да, удалить');
 }
 test('delete is confirmed by two taps, never by blocked Android WebView confirm()',()=>{
   const app=testApp();
@@ -158,7 +158,7 @@ test('delete is confirmed by two taps, never by blocked Android WebView confirm(
   assert.equal(JSON.parse(app.storage.get('svoi.addressCollector.records.v1')).length,1);
   click(deleteButton(app));
   assert.equal(JSON.parse(app.storage.get('svoi.addressCollector.records.v1')).length,1);
-  assert.equal(deleteButton(app).textContent,'Удалить?');
+  assert.equal(deleteButton(app).textContent,'Да, удалить');
   click(deleteButton(app));
   assert.equal(JSON.parse(app.storage.get('svoi.addressCollector.records.v1')).length,0);
   assert.equal(app.$('listCount').textContent,'0 всего · моих 0');
@@ -182,4 +182,33 @@ test('removing an owned point does not resurrect an old shared copy',()=>{
   assert.match(app.$('addressList').children[0].textContent,/Точек пока нет/);
   assert.match(syncJs,/function onLocalDeleted\(id\)\{[\s\S]*?shared=shared\.filter\(record=>record\.id!==id\)/);
   assert.match(syncJs,/function getSharedRows\(\)\{return shared\.filter\(record=>!deletedIds\.includes\(record\.id\)\)\}/);
+});
+
+test('a dispatcher-deleted local point vanishes from map without erasing its phone backup',()=>{
+  const app=testApp();
+  app.$('street').value='Титова';app.$('house').value='72';
+  placeManual(app);click(app.$('saveFromMap'));
+  const local=JSON.parse(app.storage.get('svoi.addressCollector.records.v1'));
+  assert.equal(local.length,1);
+  app.context.window.SvoiTeamSync={
+    getSharedRows:()=>[],
+    isLocalHidden:id=>id===local[0].id,
+  };
+  app.context.window.SvoiCollector.refreshShared();
+  assert.equal(app.$('headerCount').textContent,'0 адресов');
+  assert.match(app.$('listCount').textContent,/скрыто диспетчером 1/);
+  assert.equal(app.allMarkers.filter(x=>x.element.className==='collector-house-number'&&!x.removed).length,0);
+  assert.equal(JSON.parse(app.storage.get('svoi.addressCollector.records.v1')).length,1,
+    'original phone backup must remain intact');
+});
+test('remote point is explicitly read-only to collectors',()=>{
+  const app=testApp();
+  app.context.window.SvoiTeamSync={getSharedRows:()=>[{
+    id:'remote-record',settlement:'Агинское',street:'Титова',house:'71',
+    pointType:'дом',entrance:'',comment:'',lat:55.2586,lng:94.9079,
+    accuracyM:null,source:'map',capturedAt:'2026-11-19T00:00:00.000Z'
+  }]};
+  app.context.window.SvoiCollector.refreshShared();
+  const item=app.$('addressList').children[0];
+  assert.equal(item.children[1].textContent,'Общая точка · удалить из общей базы может диспетчер');
 });
