@@ -38,6 +38,15 @@
     <p id="syncPending" class="hint">На отправку: 0</p>
     <div id="syncTeamStats" class="team-stats" aria-label="Статистика сборщиков"></div>
   </section>
+  <section class="panel update-panel">
+    <div class="section-head"><h2>Обновления приложения</h2><span class="tag">СВОИ · Сбор адресов</span></div>
+    <p id="updateInfo" class="hint" role="status" aria-live="polite">Проверка официальных обновлений…</p>
+    <div class="actions">
+      <button id="checkForUpdates" class="secondary" type="button">↻ Проверить обновления</button>
+      <button id="installUpdate" class="primary" type="button" hidden>Обновить приложение</button>
+    </div>
+    <p class="hint">Обновление загружается внутри сборщика. Android попросит подтвердить установку. Собранные адреса и ключ сохраняются.</p>
+  </section>
   <section class="panel">
     <div class="section-head"><h2>Новый адрес</h2><span class="tag" id="editBadge">Новая точка</span></div>
     <div class="form-grid">
