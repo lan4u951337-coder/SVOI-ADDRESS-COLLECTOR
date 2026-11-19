@@ -143,3 +143,43 @@ test('collector no longer relies on remote font glyphs for visible house numbers
   assert.match(html,/id="saveFromMap"/);
   assert.doesNotMatch(js,/confirm\('Точка поставлена/);
 });
+
+const syncJs=read(BASE+'team-sync.js');
+function deleteButton(app){
+  const item=app.$('addressList').children[0];
+  assert.ok(item,'expected an address row');
+  const actions=item.children[1];
+  return actions?.children?.find(el=>el.textContent==='×'||el.textContent==='Удалить?');
+}
+test('delete is confirmed by two taps, never by blocked Android WebView confirm()',()=>{
+  const app=testApp();
+  app.$('street').value='Ленина';app.$('house').value='15А';
+  placeManual(app);click(app.$('saveFromMap'));
+  assert.equal(JSON.parse(app.storage.get('svoi.addressCollector.records.v1')).length,1);
+  click(deleteButton(app));
+  assert.equal(JSON.parse(app.storage.get('svoi.addressCollector.records.v1')).length,1);
+  assert.equal(deleteButton(app).textContent,'Удалить?');
+  click(deleteButton(app));
+  assert.equal(JSON.parse(app.storage.get('svoi.addressCollector.records.v1')).length,0);
+  assert.equal(app.$('listCount').textContent,'0 всего · моих 0');
+  assert.equal(app.confirms(),0,'Android WebView confirm() must never be called for delete');
+  assert.equal(app.allMarkers.filter(m=>m.element.className==='collector-house-number'&&!m.removed).length,0);
+});
+test('removing an owned point does not resurrect an old shared copy',()=>{
+  const app=testApp();
+  app.$('street').value='Ленина';app.$('house').value='15А';
+  placeManual(app);click(app.$('saveFromMap'));
+  let shared=JSON.parse(app.storage.get('svoi.addressCollector.records.v1'));
+  let queuedDelete=null;
+  app.context.window.SvoiTeamSync={
+    getSharedRows:()=>shared,
+    onLocalDeleted:id=>{queuedDelete=id;shared=shared.filter(r=>r.id!==id)},
+  };
+  click(deleteButton(app));click(deleteButton(app));
+  assert.ok(queuedDelete);
+  assert.equal(app.$('headerCount').textContent,'0 адресов');
+  assert.equal(app.$('addressList').children.length,1);
+  assert.match(app.$('addressList').children[0].textContent,/Точек пока нет/);
+  assert.match(syncJs,/function onLocalDeleted\(id\)\{[\s\S]*?shared=shared\.filter\(record=>record\.id!==id\)/);
+  assert.match(syncJs,/function getSharedRows\(\)\{return shared\.filter\(record=>!deletedIds\.includes\(record\.id\)\)\}/);
+});
