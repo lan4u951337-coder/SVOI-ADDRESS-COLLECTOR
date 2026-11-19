@@ -1,4 +1,4 @@
-name: Build and sign SVOI address collector 0.8.2
+name: Build and sign SVOI address collector 0.8.3
 
 on:
   push:
@@ -133,7 +133,7 @@ jobs:
             assert b'saveFromMap' in js
             assert b'checkForUpdates' in js
             assert len(z.read('assets/maplibre-gl.js'))>200_000
-          print('PUBLIC_COLLECTOR_0_8_2_DEBUG_BUILD_VERIFIED')
+          print('PUBLIC_COLLECTOR_0_8_3_DEBUG_BUILD_VERIFIED')
           PY
           sha256sum "$APK"
 
@@ -171,7 +171,7 @@ jobs:
           ICON=android-driver/address-collector/src/main/res/drawable-nodpi/svoi_collector_icon.png
           test "$(git hash-object "$ICON")" = 2940c67071b6431bbacce66556dc832fc7b7e4f1
           grep -F 'applicationId = "ru.svoitaxi.collector"' android-driver/address-collector/build.gradle.kts
-          grep -F 'versionName = "0.8.2"' android-driver/address-collector/build.gradle.kts
+          grep -F 'versionName = "0.8.3"' android-driver/address-collector/build.gradle.kts
 
       - name: Refuse to overwrite a published release tag
         shell: bash
@@ -179,8 +179,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if gh release view v0.8.2 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo 'Official v0.8.2 release already exists; bump version/tag to publish future updates.'
+          if gh release view v0.8.3 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Official v0.8.3 release already exists; bump version/tag to publish future updates.'
             exit 1
           fi
 
@@ -236,7 +236,7 @@ jobs:
             | tr '[:upper:]' '[:lower:]' \
             | grep -F '7f57730bcaa2648a725cf11264a8a2829fd0a16bc1d06e55ed1cefd4371b1063'
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" \
-            | grep -F "package: name='ru.svoitaxi.collector' versionCode='10' versionName='0.8.2'"
+            | grep -F "package: name='ru.svoitaxi.collector' versionCode='11' versionName='0.8.3'"
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump resources "$APK" \
             | grep -F 'svoi_collector_icon'
           python3 - <<'PY'
@@ -262,13 +262,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh release create v0.8.2 release/SVOI-Address-Collector.apk \
+          gh release create v0.8.3 release/SVOI-Address-Collector.apk \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title 'СВОИ ТАКСИ — Сбор адресов 0.8.2' \
-            --notes 'Версия 0.8.2: исправлено отображение удалённых диспетчером адресов в локальной карте, добавлено понятное подтверждение удаления своих точек. Копии на телефоне остаются в резервных данных, удалённые сервером точки не загружаются повторно. Для официальной 0.8.1 обновление доступно прямо в приложении; для 0.8.0 — поверх APK без удаления данных.' \
+            --title 'СВОИ ТАКСИ — Сбор адресов 0.8.3' \
+            --notes 'Версия 0.8.3: только мобильная вёрстка списка адресов. Адреса и комментарий диспетчера теперь занимают отдельные строки, подписи домов не сжимаются, счётчик адресов не мешает заголовку. Логика удаления, GPS, синхронизация и локальная база без изменений. Обновление устанавливается поверх предыдущей официальной версии без удаления данных.' \
             --latest
-          test -n "$(gh release view v0.8.2 --repo "$GITHUB_REPOSITORY" --json assets \
+          test -n "$(gh release view v0.8.3 --repo "$GITHUB_REPOSITORY" --json assets \
             --jq '.assets[] | select(.name == "SVOI-Address-Collector.apk") | .url')"
           echo 'SVOI_COLLECTOR_OFFICIAL_RELEASE_PUBLISHED'
           echo 'OFFICIAL_APK_URL=https://github.com/lan4u951337-coder/SVOI-ADDRESS-COLLECTOR/releases/latest/download/SVOI-Address-Collector.apk'
