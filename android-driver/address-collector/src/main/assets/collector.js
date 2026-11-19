@@ -45,7 +45,7 @@ function onUpdateStatus(payload){
 
   // Native Android verifies that the release is strictly newer before reporting "available".
   // The prompt must not appear for an up-to-date version or a network error.
-  if(state==='available'&&/^v\\d+\\.\\d+\\.\\d+$/.test(version)&&
+  if(state==='available'&&/^v\d+\.\d+\.\d+$/.test(version)&&
       version!==updateDismissedVersion&&version!==updatePromptVersion){
     updatePromptVersion=version;
     $('updateDialogDescription').textContent='Доступна новая версия '+version.slice(1)+' сборщика адресов.';
