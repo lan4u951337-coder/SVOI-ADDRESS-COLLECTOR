@@ -7,10 +7,11 @@ const CONFIG_KEY='svoi.addressCollector.team.credentials.v1';
 const SYNC_KEY='svoi.addressCollector.team.uploaded.v1';
 const DELETE_KEY='svoi.addressCollector.team.explicitDeletes.v1';
 const CACHE_KEY='svoi.addressCollector.team.cache.v1';
+const OPERATOR_HIDDEN_KEY='svoi.addressCollector.team.operatorHidden.v1';
 const $=id=>document.getElementById(id);
 const core=window.SvoiAddressCore;
 let credentials=null,shared=[],stats=[],total=0,synced={},deletedIds=[],running=false,queued=false,offline=false;
-let conflicts=new Map(),timer=null,lastSuccess=0;
+let conflicts=new Map(),timer=null,lastSuccess=0,operatorHiddenIds=new Set();
 function loadJson(key,fallback){
   try{return JSON.parse(localStorage.getItem(key)||'null')||fallback}catch{return fallback}
 }
@@ -27,7 +28,7 @@ function digest(rec){
 }
 function pendingCount(){
   const own=localRows();
-  return own.filter(r=>synced[r.id]!==digest(r)).length+deletedIds.length;
+  return own.filter(r=>!operatorHiddenIds.has(r.id)&&synced[r.id]!==digest(r)).length+deletedIds.length;
 }
 function normalRemote(raw){
   const normalized=core.normalizeRecord(raw);
@@ -39,6 +40,8 @@ function renderStatus(text,bad=false){
   node.className='sync-status '+(bad?'bad':credentials?'good':'warn');
   $('syncPending').textContent='На отправку: '+pendingCount();
   $('sharedCount').textContent=total+' адресов в общей базе';
+  const hidden=localRows().filter(r=>operatorHiddenIds.has(r.id)).length;
+  $('syncPending').textContent+=' · скрыто диспетчером: '+hidden;
   $('syncTeamStats').replaceChildren();
   for(const line of stats.slice(0,30)){
     const row=document.createElement('div');row.className='team-stat';
@@ -84,7 +87,7 @@ async function request(method='GET',body){
   }finally{clearTimeout(timeout)}
 }
 function disconnect(){
-  credentials=null;shared=[];stats=[];total=0;synced={};deletedIds=[];conflicts.clear();lastSuccess=0;
+  credentials=null;shared=[];stats=[];total=0;synced={};deletedIds=[];operatorHiddenIds.clear();conflicts.clear();lastSuccess=0;
   try{localStorage.removeItem(CONFIG_KEY)}catch{}
   $('collectorSecret').value='';$('syncConnection').textContent='Подключить';
   $('collectorName').disabled=false;$('collectorSecret').disabled=false;
@@ -103,6 +106,8 @@ function onConnected(){
   synced=loadJson(SYNC_KEY+':'+credentials.name,{});
   deletedIds=loadJson(DELETE_KEY+':'+credentials.name,[]);
   if(!Array.isArray(deletedIds))deletedIds=[];
+  const previouslyHidden=loadJson(OPERATOR_HIDDEN_KEY+':'+credentials.name,[]);
+  operatorHiddenIds=new Set(Array.isArray(previouslyHidden)?previouslyHidden.filter(id=>typeof id==='string').slice(0,10000):[]);
   if(!synced||typeof synced!=='object'||Array.isArray(synced))synced={};
   restoreCache();
   renderStatus('Подключаемся к общей базе…');
@@ -123,7 +128,8 @@ function connect(){
   onConnected();
 }
 function persistState(){
-  if(!writeJson(SYNC_KEY+':'+credentials.name,synced)||!writeJson(DELETE_KEY+':'+credentials.name,deletedIds)){
+  if(!writeJson(SYNC_KEY+':'+credentials.name,synced)||!writeJson(DELETE_KEY+':'+credentials.name,deletedIds)||
+    !writeJson(OPERATOR_HIDDEN_KEY+':'+credentials.name,[...operatorHiddenIds])){
     renderStatus('Внимание: список отправленных точек не сохраняется. Освободите память.',true);
     return false;
   }
@@ -135,6 +141,24 @@ async function pull(){
   shared=data.addresses.map(normalRemote).filter(Boolean).slice(0,10000);
   stats=data.stats.map(x=>({name:String(x.name||'').slice(0,60),count:Number(x.count)||0}));
   total=Number(data.total)||0;
+  // The server is authoritative only when the full active list was returned.
+  // No destructive operation: original phone records stay in localStorage/GeoJSON.
+  // Previously uploaded IDs absent from this complete server snapshot were removed
+  // by the dispatcher (or are otherwise no longer active on the shared map).
+  // The 10,000-address API cap must never cause false local hiding.
+  if(total===shared.length){
+    const active=new Set(shared.map(record=>record.id));
+    let changed=false;
+    for(const rec of localRows()){
+      if(!synced[rec.id]||deletedIds.includes(rec.id))continue;
+      if(!active.has(rec.id)&&!operatorHiddenIds.has(rec.id)){
+        operatorHiddenIds.add(rec.id);changed=true;
+      }else if(active.has(rec.id)&&operatorHiddenIds.delete(rec.id)){
+        changed=true;
+      }
+    }
+    if(changed)persistState();
+  }
   saveShared();updateMap();
 }
 async function push(){
@@ -147,13 +171,22 @@ async function push(){
     delete synced[id];persistState();
   }
   for(const record of own){
+    // An operator-deleted local copy must not be uploaded again.
+    if(operatorHiddenIds.has(record.id))continue;
     const hash=digest(record);
     if(synced[record.id]===hash)continue;
     const lastConflict=conflicts.get(record.id);
     if(lastConflict?.hash===hash&&shared.some(remote=>core.key(remote)===core.key(record)))continue;
     try{
-      await request('POST',{record});
-      synced[record.id]=hash;conflicts.delete(record.id);
+      const result=await request('POST',{record});
+      // The backend returns {deleted:true} for the same historical ID.
+      // Honour that response instead of falsely reporting it as uploaded.
+      if(result.deleted===true){
+        operatorHiddenIds.add(record.id);
+      }else{
+        synced[record.id]=hash;
+      }
+      conflicts.delete(record.id);
       persistState();
     }catch(error){
       if(error.status===409){
@@ -214,6 +247,7 @@ function onLocalDeleted(id){
   scheduleSync();
 }
 function getSharedRows(){return shared.filter(record=>!deletedIds.includes(record.id))}
+function isLocalHidden(id){return operatorHiddenIds.has(id)}
 function isConflict(id){return conflicts.has(id)}
 $('syncConnection').addEventListener('click',connect);
 $('syncNow').addEventListener('click',()=>{
@@ -222,7 +256,7 @@ $('syncNow').addEventListener('click',()=>{
 });
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&credentials)scheduleSync()});
 window.addEventListener('online',()=>{if(credentials)scheduleSync()});
-window.SvoiTeamSync=Object.freeze({getSharedRows,onLocalChanged,onLocalDeleted,isConflict});
+window.SvoiTeamSync=Object.freeze({getSharedRows,isLocalHidden,onLocalChanged,onLocalDeleted,isConflict});
 loadCredentials();
 if(credentials)onConnected();
 else renderStatus('Общая база не подключена. Можно продолжать сбор на этом телефоне.');

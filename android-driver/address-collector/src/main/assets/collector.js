@@ -228,7 +228,8 @@ function drawChosen(){
   }else chosenMarker.setLngLat(coord);
 }
 function combinedRows(){
-  const all=rows.slice(),keys=new Set(rows.map(core.key));
+  const visible=rows.filter(rec=>!window.SvoiTeamSync?.isLocalHidden?.(rec.id));
+  const all=visible.slice(),keys=new Set(visible.map(core.key));
   for(const remote of window.SvoiTeamSync?.getSharedRows?.()||[]){
     const k=core.key(remote);
     if(keys.has(k))continue;
@@ -329,7 +330,8 @@ function render(){
   const all=combinedRows();
   const noun=all.length===1?'адрес':all.length>=2&&all.length<=4?'адреса':'адресов';
   $('headerCount').textContent=all.length+' '+noun;
-  $('listCount').textContent=all.length+' всего · моих '+rows.length;
+  const visibleMine=rows.filter(rec=>!window.SvoiTeamSync?.isLocalHidden?.(rec.id)).length;
+  $('listCount').textContent=all.length+' всего · моих '+visibleMine+(rows.length>visibleMine?' · скрыто диспетчером '+(rows.length-visibleMine):'');
   const q=$('filter').value.trim().toLocaleLowerCase('ru');
   const list=$('addressList');list.replaceChildren();
   const found=all.filter(r=>[r.settlement,r.street,r.house,r.entrance].join(' ').toLocaleLowerCase('ru').includes(q)).slice().reverse();
@@ -350,20 +352,26 @@ function render(){
       (window.SvoiTeamSync?.isConflict?.(rec.id)?' · ⚠ Дубль в общей базе':'');
     body.append(title,meta);
     const actions=document.createElement('div');actions.className='addr-actions';
-    if(!rows.some(local=>local.id===rec.id)){item.append(body);list.appendChild(item);continue}
+    if(!rows.some(local=>local.id===rec.id)){
+      const readonly=document.createElement('div');
+      readonly.className='addr-meta';
+      readonly.textContent='Общая точка · удалить из общей базы может диспетчер';
+      item.append(body,readonly);list.appendChild(item);continue;
+    }
     const edit=document.createElement('button');edit.type='button';edit.textContent='Править';
     edit.addEventListener('click',()=>editRecord(rec.id));
-    const del=document.createElement('button');del.type='button';del.className='del';del.textContent='×';
-    del.setAttribute('aria-label','Удалить '+rec.street+', '+rec.house);
-    del.textContent=pendingDeleteId===rec.id&&Date.now()<pendingDeleteUntil?'Удалить?':'×';
+    const del=document.createElement('button');del.type='button';del.className='del';
+    const confirming=pendingDeleteId===rec.id&&Date.now()<pendingDeleteUntil;
+    del.textContent=confirming?'Да, удалить':'Удалить';
+    del.setAttribute('aria-label',(confirming?'Подтвердить удаление ':'Удалить ')+rec.street+', '+rec.house);
     del.addEventListener('click',()=>{
       // Android WebView without a WebChromeClient silently rejects confirm().
       // Require two deliberate taps instead of a JavaScript modal dialog.
       const now=Date.now();
       if(pendingDeleteId!==rec.id||now>pendingDeleteUntil){
-        pendingDeleteId=rec.id;pendingDeleteUntil=now+10000;
+        pendingDeleteId=rec.id;pendingDeleteUntil=now+30000;
         render();
-        msg('Нажмите «Удалить?» ещё раз в течение 10 секунд: '+rec.street+', '+rec.house+'.');
+        msg('Подтвердите удаление адреса кнопкой «Да, удалить»: '+rec.street+', '+rec.house+'.');
         return;
       }
       pendingDeleteId=null;pendingDeleteUntil=0;
@@ -374,7 +382,18 @@ function render(){
         msg('Адрес удалён с телефона. Общая база обновится при синхронизации.');
       }
     });
-    actions.append(edit,del);item.append(body,actions);list.appendChild(item);
+    actions.append(edit,del);
+    if(confirming){
+      const cancel=document.createElement('button');
+      cancel.type='button';cancel.textContent='Отмена';
+      cancel.addEventListener('click',()=>{pendingDeleteId=null;pendingDeleteUntil=0;render()});
+      actions.append(cancel);
+      const warning=document.createElement('div');
+      warning.className='addr-meta';
+      warning.textContent='Подтвердите удаление этой точки или нажмите «Отмена».';
+      item.append(body,actions,warning);
+    }else item.append(body,actions);
+    list.appendChild(item);
   }
 }
 function clearForm(){
