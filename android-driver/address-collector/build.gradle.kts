@@ -16,8 +16,8 @@ android {
         applicationId = "ru.svoitaxi.collector"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "0.8.0"
+        versionCode = 9
+        versionName = "0.8.1"
     }
 
     buildFeatures {
@@ -69,6 +69,7 @@ tasks.named("preBuild") {
 
 dependencies {
     implementation("androidx.webkit:webkit:1.14.0")
+    implementation("androidx.core:core:1.17.0")
 }
 
 tasks.matching { it.name == "packageRelease" }.configureEach {
