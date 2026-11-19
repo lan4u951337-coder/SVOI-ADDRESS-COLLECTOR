@@ -16,6 +16,20 @@
   </div></div>
   <div class="count" id="headerCount">0 адресов</div>
 </header>
+<!-- Shown only after the native updater verifies a newer official stable release. -->
+<div id="updateDialog" class="update-dialog" hidden>
+  <div class="update-dialog__card" role="dialog" aria-modal="true" aria-labelledby="updateDialogTitle" aria-describedby="updateDialogDescription">
+    <div class="update-dialog__symbol" aria-hidden="true">↻</div>
+    <h2 id="updateDialogTitle">Доступно обновление</h2>
+    <p id="updateDialogDescription">Для сборщика адресов выпущена новая версия.</p>
+    <p id="updateDialogStatus" class="update-dialog__status" role="status" aria-live="polite">Ваши адреса и ключ доступа сохранятся.</p>
+    <div class="update-dialog__actions">
+      <button id="updateDialogInstall" class="primary" type="button">Обновить</button>
+      <button id="updateDialogLater" class="secondary" type="button">Позже</button>
+    </div>
+    <p class="update-dialog__hint">Обновление загрузится внутри приложения. Android попросит подтвердить установку.</p>
+  </div>
+</div>
 <main>
   <div class="safety">⚠️ Координаты фиксируйте только после полной остановки автомобиля. Точка GPS может находиться на дороге — уточните положение дома или подъезда на карте.</div>
   <section class="panel gps-panel" aria-label="GPS">
