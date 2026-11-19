@@ -13,8 +13,8 @@ const paths=read(B+'src/main/res/xml/collector_update_paths.xml');
 
 test('official updater keeps package name, increases version and retains original signing key',()=>{
   assert.ok(gradle.includes('applicationId = "ru.svoitaxi.collector"'));
-  assert.ok(gradle.includes('versionCode = 10'));
-  assert.ok(gradle.includes('versionName = "0.8.2"'));
+  assert.ok(gradle.includes('versionCode = 11'));
+  assert.ok(gradle.includes('versionName = "0.8.3"'));
   assert.ok(gradle.includes('SVOI_COLLECTOR_RELEASE_STORE_FILE'));
   assert.ok(gradle.includes('signingConfig = signingConfigs.getByName("collectorRelease")'));
 });
