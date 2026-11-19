@@ -32,6 +32,8 @@ function testApp(){
   $('settlement').value='Агинское';
   $('pointType').value='дом';
   $('filter').value='';
+  $('updateDialog').hidden=true;
+  $('installUpdate').hidden=true;
   class MapMock {
     constructor(){this.zoom=17.5;this.sources=new Map();this.bounds={contains:([lng,lat])=>lng>90&&lng<99&&lat>50&&lat<59}}
     on(name,fn){mapEvents.set(name,fn)}
@@ -50,7 +52,7 @@ function testApp(){
     addTo(){return this}
     remove(){this.removed=true}
   }
-  const native={startLocation(){},stopLocation(){}};
+  const native={startLocation(){},stopLocation(){},installAvailableUpdate(){this.installs=(this.installs||0)+1},checkForUpdates(){this.checks=(this.checks||0)+1}};
   const maplibre={Map:MapMock,Marker:MarkerMock,NavigationControl:class {}};
   const context=vm.createContext({
     console,Date,Math,Map,Set,Number,JSON,
@@ -65,7 +67,7 @@ function testApp(){
   context.window.SvoiGpsQuality={};
   vm.runInContext(js,context,{timeout:2000});
   mapEvents.get('load')();
-  return {nodes,$,storage,mapEvents,allMarkers,context,alerts:()=>alerts,confirms:()=>confirms};
+  return {nodes,$,storage,mapEvents,allMarkers,context,native,alerts:()=>alerts,confirms:()=>confirms};
 }
 function click(element){const cb=element.handlers.get('click');assert.equal(typeof cb,'function');cb()}
 function placeManual(app,lat=55.2586,lng=94.9079){
@@ -237,4 +239,38 @@ test('shared collector point keeps its address and dispatcher note as separate c
   assert.equal(card.children[0].children[0].textContent,'Строительная, 16/2 · Агинское');
   assert.match(card.children[1].textContent,/удалить из общей базы может диспетчер/);
   assert.equal(card.children[1].className,'addr-meta');
+});
+
+test('verified newer version opens a prominent update dialog with Update and Later',()=>{
+  const app=testApp(),report=app.context.window.SvoiCollector.onUpdateStatus;
+  assert.match(html,/id="updateDialog" class="update-dialog" hidden/);
+  assert.match(html,/role="dialog" aria-modal="true"/);
+  assert.match(html,/id="updateDialogInstall"[^>]*>Обновить<\/button>/);
+  assert.match(html,/id="updateDialogLater"[^>]*>Позже<\/button>/);
+  assert.match(css,/\.update-dialog\[hidden\]\{display:none!important\}/);
+  assert.equal(app.$('updateDialog').hidden,true);
+  report({state:'current',message:'Актуальная версия',version:''});
+  assert.equal(app.$('updateDialog').hidden,true,'no prompt for current version');
+  report({state:'error',message:'Нет сети',version:''});
+  assert.equal(app.$('updateDialog').hidden,true,'no prompt on network error');
+  report({state:'available',message:'Доступна новая версия',version:'v0.8.5'});
+  assert.equal(app.$('updateDialog').hidden,false);
+  assert.match(app.$('updateDialogDescription').textContent,/0\.8\.5/);
+  assert.equal(app.$('updateDialogInstall').textContent,'Обновить');
+  assert.equal(app.$('updateDialogLater').disabled,false);
+  click(app.$('updateDialogLater'));
+  assert.equal(app.$('updateDialog').hidden,true);
+  assert.equal(app.native.installs||0,0,'Later must not download or install');
+  assert.equal(app.$('installUpdate').hidden,false,'the existing manual update control remains');
+  report({state:'available',message:'Та же версия',version:'v0.8.5'});
+  assert.equal(app.$('updateDialog').hidden,true,'Later suppresses repeat for this version during the session');
+  report({state:'available',message:'Новый выпуск',version:'v0.8.6'});
+  assert.equal(app.$('updateDialog').hidden,false,'a new version is shown');
+  click(app.$('updateDialogInstall'));
+  assert.equal(app.native.installs,1,'native installer only called from explicit Update click');
+  report({state:'downloading',message:'Загружаем',version:'v0.8.6'});
+  assert.equal(app.$('updateDialogInstall').disabled,true);
+  assert.equal(app.$('updateDialogLater').disabled,true);
+  report({state:'ready',message:'Готово',version:'v0.8.6'});
+  assert.equal(app.$('updateDialogInstall').disabled,false);
 });
