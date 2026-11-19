@@ -205,9 +205,15 @@ function onLocalChanged(){
 function onLocalDeleted(id){
   if(!credentials||typeof id!=='string')return;
   if(!deletedIds.includes(id))deletedIds.push(id);
-  persistState();scheduleSync();
+  // Hide the local/remote duplicate immediately, even if offline.
+  // Keep the explicit deletion queued until the server acknowledges it.
+  shared=shared.filter(record=>record.id!==id);
+  saveShared();
+  persistState();
+  updateMap();
+  scheduleSync();
 }
-function getSharedRows(){return shared}
+function getSharedRows(){return shared.filter(record=>!deletedIds.includes(record.id))}
 function isConflict(id){return conflicts.has(id)}
 $('syncConnection').addEventListener('click',connect);
 $('syncNow').addEventListener('click',()=>{
