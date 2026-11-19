@@ -22,7 +22,7 @@ test('official app installs separately from older test builds without deleting a
   const gradle=read('android-driver/address-collector/build.gradle.kts');
   const html=read('android-driver/address-collector/src/main/assets/collector.html');
   assert.match(gradle,/applicationId = "ru\.svoitaxi\.collector"/);
-  assert.match(gradle,/versionCode = 8/);
+  assert.match(gradle,/versionCode = 9/);
   assert.match(gradle,/versionName = "0\.8\.0"/);
   assert.doesNotMatch(html,/Сбор адресов · тестовая версия/);
   assert.match(html,/Сбор адресов · общая карта/);
