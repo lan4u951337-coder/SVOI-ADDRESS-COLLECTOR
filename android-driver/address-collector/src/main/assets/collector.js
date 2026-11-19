@@ -6,6 +6,7 @@ const core=window.SvoiAddressCore, quality=window.SvoiGpsQuality;
 const KEY='svoi.addressCollector.records.v1',CENTER=[94.9079,55.2586];
 const $=id=>document.getElementById(id);
 let rows=[],gps=null,watch=null,chosen=null,editId=null,manualMode=false,storageBlocked=false;
+let pendingDeleteId=null,pendingDeleteUntil=0;
 let nativeActive=false,gpsStatus='Запрашиваем координаты телефона…',gpsStatusKind='warn';
 let precision=null;
 let map=null,gpsMarker=null,chosenMarker=null,mapLoaded=false,lastMapError=0;
@@ -344,9 +345,23 @@ function render(){
     edit.addEventListener('click',()=>editRecord(rec.id));
     const del=document.createElement('button');del.type='button';del.className='del';del.textContent='×';
     del.setAttribute('aria-label','Удалить '+rec.street+', '+rec.house);
+    del.textContent=pendingDeleteId===rec.id&&Date.now()<pendingDeleteUntil?'Удалить?':'×';
     del.addEventListener('click',()=>{
-      if(confirm('Удалить адрес '+rec.street+', '+rec.house+'? Удаление нельзя отменить без резервной копии.')){
-        if(persist(rows.filter(r=>r.id!==rec.id))){window.SvoiTeamSync?.onLocalDeleted?.(rec.id);msg('Адрес удалён на телефоне. Если включена синхронизация, он будет удалён и из общей базы.');}
+      // Android WebView without a WebChromeClient silently rejects confirm().
+      // Require two deliberate taps instead of a JavaScript modal dialog.
+      const now=Date.now();
+      if(pendingDeleteId!==rec.id||now>pendingDeleteUntil){
+        pendingDeleteId=rec.id;pendingDeleteUntil=now+10000;
+        render();
+        msg('Нажмите «Удалить?» ещё раз в течение 10 секунд: '+rec.street+', '+rec.house+'.');
+        return;
+      }
+      pendingDeleteId=null;pendingDeleteUntil=0;
+      if(persist(rows.filter(r=>r.id!==rec.id))){
+        window.SvoiTeamSync?.onLocalDeleted?.(rec.id);
+        // The old shared snapshot can still contain this ID after local deletion.
+        render();refreshMapPoints();
+        msg('Адрес удалён с телефона. Общая база обновится при синхронизации.');
       }
     });
     actions.append(edit,del);item.append(body,actions);list.appendChild(item);
