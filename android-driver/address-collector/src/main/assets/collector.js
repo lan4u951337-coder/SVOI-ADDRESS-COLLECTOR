@@ -30,6 +30,16 @@ function showSaveFeedback(message,kind='bad',fieldId=''){
   }
   if(fieldId)$(fieldId).setAttribute('aria-invalid','true');
 }
+function onUpdateStatus(payload){
+  if(!payload||typeof payload!=='object')return;
+  $('updateInfo').textContent=String(payload.message||'Проверка обновлений завершена.');
+  const state=String(payload.state||'');
+  $('installUpdate').hidden=!['available','ready','permission','downloading'].includes(state);
+  $('installUpdate').disabled=state==='downloading'||state==='checking';
+  $('installUpdate').textContent=state==='permission'?'Продолжить обновление':
+    state==='downloading'?'Загружаем APK…':'Обновить приложение';
+  $('checkForUpdates').disabled=state==='checking'||state==='downloading';
+}
 function safeLoad(){
   try{
     const raw=localStorage.getItem(KEY);
@@ -474,6 +484,13 @@ for(const field of ['settlement','street','house'])$(field).addEventListener('in
 $('filter').addEventListener('input',render);
 $('exportGeo').addEventListener('click',()=>exportFile('geo'));
 $('exportCsv').addEventListener('click',()=>exportFile('csv'));
+$('checkForUpdates').addEventListener('click',()=>{
+  if(window.CollectorNative?.checkForUpdates)window.CollectorNative.checkForUpdates();
+  else onUpdateStatus({state:'error',message:'Проверка обновлений доступна в Android-приложении версии 0.8.1 и выше.'});
+});
+$('installUpdate').addEventListener('click',()=>{
+  if(window.CollectorNative?.installAvailableUpdate)window.CollectorNative.installAvailableUpdate();
+});
 $('importGeo').addEventListener('click',()=>{
   if(!window.CollectorNative){msg('Импорт доступен в Android-приложении.');return}
   window.CollectorNative.importGeoJson();
@@ -482,7 +499,9 @@ document.addEventListener('visibilitychange',()=>{
   if(document.hidden)stopGps();
   else {geoWatch();map?.resize()}
 });
-window.SvoiCollector=Object.freeze({receiveImport,onNativeLocation,onNativeStatus,localRows:()=>rows,localStorageHealthy:()=>!storageBlocked,refreshShared:()=>{render();refreshMapPoints()},notify:msg});
+window.SvoiCollector=Object.freeze({receiveImport,onNativeLocation,onNativeStatus,onUpdateStatus,localRows:()=>rows,localStorageHealthy:()=>!storageBlocked,refreshShared:()=>{render();refreshMapPoints()},notify:msg});
 rows=safeLoad();render();updateGpsPanel();geoWatch();setupMap();
+// Checking in the background is read-only; download and installation require a tap.
+setTimeout(()=>{if(window.CollectorNative?.checkForUpdates)window.CollectorNative.checkForUpdates()},1600);
 setInterval(()=>{if(!document.hidden)updateGpsPanel()},10000);
 })();
