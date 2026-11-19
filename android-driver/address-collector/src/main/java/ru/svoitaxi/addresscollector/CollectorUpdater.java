@@ -216,7 +216,8 @@ final class CollectorUpdater {
     private File downloadAndValidate(Release release) throws Exception {
         File dir=new File(activity.getCacheDir(),"updates");
         if(!dir.isDirectory()&&!dir.mkdirs())throw new Exception("Не удалось подготовить папку обновлений");
-        File tmp=new File(dir,"svoi-update.part");
+        // Android PackageManager parses archives reliably only with an .apk suffix.
+        File tmp=new File(dir,"svoi-update-pending.apk");
         File complete=new File(dir,"svoi-update-"+release.tag+".apk");
         if(tmp.exists())tmp.delete();
         HttpURLConnection con=connection(release.url);
